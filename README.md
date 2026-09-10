@@ -2,7 +2,7 @@
 
 Servicio web SOAP implementado en PHP utilizando la librería **NuSOAP** y conexión a base de datos MySQL mediante **PDO**.
 
-## 📋 Descripción
+##  Descripción
 
 Este proyecto expone un servidor SOAP con WSDL que permite realizar operaciones CRUD sobre la tabla `user`:
 - `InsertUserService`: Registra un nuevo usuario con validación de datos requeridos y unicidad de documento.
@@ -11,7 +11,7 @@ Este proyecto expone un servidor SOAP con WSDL que permite realizar operaciones 
 - `SelectUserService`: Obtiene los datos detallados de un usuario específico.
 - `ListUsersService`: Lista todos los usuarios registrados.
 
-## 📁 Estructura del Proyecto
+##  Estructura del Proyecto
 
 ```text
 ├── composer.json           # Definición de dependencias (econea/nusoap)
@@ -22,13 +22,13 @@ Este proyecto expone un servidor SOAP con WSDL que permite realizar operaciones 
 └── vendor/                 # Dependencias instaladas (NuSOAP)
 ```
 
-## ⚙️ Requisitos
+##  Requisitos
 
 - Servidor web Apache con PHP (v7.4 o superior recomendado, e.g., XAMPP, WAMP, Laragon).
 - Servidor de base de datos MySQL / MariaDB.
 - Extensiones PHP activas: `pdo_mysql`, `mbstring`.
 
-## 🚀 Puesta en Marcha
+##  Puesta en Marcha
 
 1. **Importar la Base de Datos**:
    - Abrir phpMyAdmin o su gestor MySQL preferido.
