@@ -74,10 +74,7 @@ $token = bin2hex(random_bytes(32));
 1. **Importar la Base de Datos**:
    - Abrir phpMyAdmin o su gestor MySQL preferido.
    - Crear o importar el script ubicado en `database/soap_cptec.sql`.
-   - Usuarios de prueba con contraseñas encriptadas:
-     - Usuario: `admin` | Contraseña: `123456`
-     - Usuario: `yenny_docente` | Contraseña: `123456`
-     - Usuario: `santiago` | Contraseña: `123456`
+   - Crea las tablas con la estructura limpia lista para registrar usuarios.
 
 2. **Configuración de Conexión**:
    - En `server.php`, verificar los parámetros de conexión según el entorno local:

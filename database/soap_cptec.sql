@@ -57,37 +57,3 @@ CREATE TABLE IF NOT EXISTS `user` (
     `created_date` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de registro',
     CONSTRAINT `fk_user_doc_type` FOREIGN KEY (`doc_type_id`) REFERENCES `document_type` (`id`) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-
--- 5. Inserción de usuarios iniciales con contraseña encriptada (SHA-256)
--- Contraseña de prueba para los usuarios: '123456'
--- Usando alias 'AS new_user' para evitar la advertencia 1287 de MySQL 8+
-INSERT INTO `user` (`user_name`, `lastname`, `doc_type_id`, `num_doc`, `password`, `address`, `phone`)
-VALUES 
-(
-    'admin', 
-    'Sistema', 
-    1, 
-    '1000000001', 
-    SHA2('123456', 256), 
-    'Calle 100 # 10-20', 
-    '3001234567'
-),
-(
-    'yenny_docente', 
-    'Perea Murillo', 
-    1, 
-    '1000000002', 
-    SHA2('123456', 256), 
-    'Universidad', 
-    '3109876543'
-),
-(
-    'santiago', 
-    'Velez', 
-    1, 
-    '1000000003', 
-    SHA2('123456', 256), 
-    'Carrera 50 # 30-10', 
-    '3155554321'
-) AS new_user
-ON DUPLICATE KEY UPDATE `password` = new_user.password;
