@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS `document_type` (
     `name` VARCHAR(100) NOT NULL COMMENT 'Nombre descriptivo del tipo de documento'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- 3. Inserción de tipos de documentos comunes
+-- 3. Inserción de tipos de documentos comunes (usando alias moderno compatible con MySQL 8+)
 INSERT INTO
     `document_type` (`id`, `code`, `name`)
 VALUES (
@@ -38,9 +38,9 @@ VALUES (
         5,
         'NIT',
         'Número de Identificación Tributaria'
-    )
+    ) AS new_dt
 ON DUPLICATE KEY UPDATE
-    `name` = VALUES(`name`);
+    `name` = new_dt.name;
 
 -- 4. Creación de tabla 'user' compatible con autenticación y tokens
 CREATE TABLE IF NOT EXISTS `user` (
@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS `user` (
 
 -- 5. Inserción de usuarios iniciales con contraseña encriptada (SHA-256)
 -- Contraseña de prueba para los usuarios: '123456'
+-- Usando alias 'AS new_user' para evitar la advertencia 1287 de MySQL 8+
 INSERT INTO `user` (`user_name`, `lastname`, `doc_type_id`, `num_doc`, `password`, `address`, `phone`)
 VALUES 
 (
@@ -88,5 +89,5 @@ VALUES
     SHA2('123456', 256), 
     'Carrera 50 # 30-10', 
     '3155554321'
-)
-ON DUPLICATE KEY UPDATE `password` = VALUES(`password`);
+) AS new_user
+ON DUPLICATE KEY UPDATE `password` = new_user.password;
