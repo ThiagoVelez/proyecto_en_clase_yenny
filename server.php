@@ -1,6 +1,9 @@
 <?php
 require_once "vendor/econea/nusoap/src/nusoap.php";
 
+// Capturar el payload XML de la petición cruda para análisis de cabeceras
+$POST_DATA = file_get_contents("php://input");
+
 // 1. Configuración del Servidor SOAP
 $namespace = "InsertUserSOAP";
 $server = new soap_server();
@@ -59,9 +62,88 @@ function verify_password($input_password, $stored_hash) {
     return false;
 }
 
+// Helper para extraer el token estrictamente desde el HEADER (SOAP Header o HTTP Header)
+function get_token_from_header($paramToken = null) {
+    global $server, $POST_DATA;
+
+    // 1. Extraer desde el SOAP Header parseado por NuSOAP ($server->requestHeader)
+    if (!empty($server->requestHeader)) {
+        $rh = $server->requestHeader;
+        if (is_array($rh)) {
+            if (!empty($rh['token'])) return trim((string)$rh['token']);
+            if (!empty($rh['Token'])) return trim((string)$rh['Token']);
+            foreach ($rh as $val) {
+                if (is_array($val)) {
+                    if (!empty($val['token'])) return trim((string)$val['token']);
+                    if (!empty($val['Token'])) return trim((string)$val['Token']);
+                }
+            }
+        } elseif (is_string($rh)) {
+            if (preg_match('/<[a-zA-Z0-9_\-:]*token[^>]*>([^<]+)<\/[a-zA-Z0-9_\-:]*token>/i', $rh, $m)) {
+                return trim($m[1]);
+            }
+        }
+    }
+
+    // 2. Extraer desde el texto crudo de los SOAP Headers de NuSOAP ($server->requestHeaders)
+    if (!empty($server->requestHeaders)) {
+        if (preg_match('/<[a-zA-Z0-9_\-:]*token[^>]*>([^<]+)<\/[a-zA-Z0-9_\-:]*token>/i', $server->requestHeaders, $m)) {
+            return trim($m[1]);
+        }
+    }
+
+    // 3. Extraer directamente desde el bloque <Header> del XML SOAP entrante ($POST_DATA)
+    $xmlInput = !empty($POST_DATA) ? $POST_DATA : file_get_contents("php://input");
+    if (!empty($xmlInput)) {
+        if (preg_match('/<[a-zA-Z0-9_\-:]*Header[^>]*>(.*?)<\/[a-zA-Z0-9_\-:]*Header>/is', $xmlInput, $headerBlock)) {
+            if (preg_match('/<[a-zA-Z0-9_\-:]*token[^>]*>([^<]+)<\/[a-zA-Z0-9_\-:]*token>/i', $headerBlock[1], $m)) {
+                return trim($m[1]);
+            }
+        }
+    }
+
+    // 4. Extraer desde las cabeceras HTTP (Header 'token' o 'Authorization: Bearer <token>')
+    if (function_exists('getallheaders')) {
+        $httpHeaders = getallheaders();
+        foreach ($httpHeaders as $k => $v) {
+            $key = strtolower($k);
+            if ($key === 'token') {
+                return trim($v);
+            }
+            if ($key === 'authorization') {
+                if (preg_match('/Bearer\s+(.*)$/i', $v, $m)) {
+                    return trim($m[1]);
+                }
+                return trim($v);
+            }
+        }
+    }
+    if (!empty($_SERVER['HTTP_TOKEN'])) {
+        return trim($_SERVER['HTTP_TOKEN']);
+    }
+    if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+        if (preg_match('/Bearer\s+(.*)$/i', $_SERVER['HTTP_AUTHORIZATION'], $m)) {
+            return trim($m[1]);
+        }
+        return trim($_SERVER['HTTP_AUTHORIZATION']);
+    }
+
+    // 5. Fallback por si se pasa como parámetro en pruebas
+    if (!empty($paramToken) && is_string($paramToken) && trim($paramToken) !== '') {
+        return trim($paramToken);
+    }
+
+    return null;
+}
+
 // Helper para validar si un token existe y es válido en la base de datos
-function validate_token($token) {
+function validate_token($token = null) {
     global $pdo;
+
+    // Si no se pasó como parámetro, extraerlo automáticamente del Header
+    if (empty($token) || !is_string($token)) {
+        $token = get_token_from_header($token);
+    }
 
     if (empty($token) || !is_string($token) || trim($token) === '' || !$pdo) {
         return false;
@@ -94,8 +176,7 @@ $server->wsdl->addComplexType(
         'num_doc'     => array('name' => 'num_doc', 'type' => 'xsd:string'),
         'password'    => array('name' => 'password', 'type' => 'xsd:string'),
         'address'     => array('name' => 'address', 'type' => 'xsd:string'),
-        'phone'       => array('name' => 'phone', 'type' => 'xsd:string'),
-        'token'       => array('name' => 'token', 'type' => 'xsd:string')
+        'phone'       => array('name' => 'phone', 'type' => 'xsd:string')
     )
 );
 
@@ -113,8 +194,7 @@ $server->wsdl->addComplexType(
         'num_doc'     => array('name' => 'num_doc', 'type' => 'xsd:string'),
         'password'    => array('name' => 'password', 'type' => 'xsd:string'),
         'address'     => array('name' => 'address', 'type' => 'xsd:string'),
-        'phone'       => array('name' => 'phone', 'type' => 'xsd:string'),
-        'token'       => array('name' => 'token', 'type' => 'xsd:string')
+        'phone'       => array('name' => 'phone', 'type' => 'xsd:string')
     )
 );
 
@@ -166,7 +246,7 @@ $server->register(
     'Iniciar sesion y generar token con random_bytes'
 );
 
-// 5.2 Servicio de Validación de Token
+// 5.2 Servicio de Validación de Token (puede recibirlo como param o leerlo del Header)
 $server->register(
     'ValidateTokenService',
     array('token' => 'xsd:string'),
@@ -175,75 +255,63 @@ $server->register(
     false,
     'rpc',
     'encoded',
-    'Validar si un token es valido'
+    'Validar si un token es valido (acepta token en param o en Header)'
 );
 
-// 5.3 Operaciones CRUD protegidas con Token
+// 5.3 Operaciones CRUD protegidas con Token en el HEADER
 $server->register(
     'InsertUserService',
-    array(
-        'data'  => 'tns:InsertUser',
-        'token' => 'xsd:string'
-    ),
+    array('data' => 'tns:InsertUser'),
     array('return' => 'xsd:string'),
     $namespace,
     false,
     'rpc',
     'encoded',
-    'Insertar un usuario (requiere token)'
+    'Insertar un usuario (requiere token en el Header)'
 );
 
 $server->register(
     'UpdateUserService',
-    array(
-        'data'  => 'tns:UpdateUser',
-        'token' => 'xsd:string'
-    ),
+    array('data' => 'tns:UpdateUser'),
     array('return' => 'xsd:string'),
     $namespace,
     false,
     'rpc',
     'encoded',
-    'Actualizar un usuario existente (requiere token)'
+    'Actualizar un usuario existente (requiere token en el Header)'
 );
 
 $server->register(
     'DeleteUserService',
-    array(
-        'id'    => 'xsd:int',
-        'token' => 'xsd:string'
-    ),
+    array('id' => 'xsd:int'),
     array('return' => 'xsd:string'),
     $namespace,
     false,
     'rpc',
     'encoded',
-    'Eliminar un usuario por ID (requiere token)'
+    'Eliminar un usuario por ID (requiere token en el Header)'
 );
 
 $server->register(
     'SelectUserService',
-    array(
-        'id'    => 'xsd:int',
-        'token' => 'xsd:string'
-    ),
+    array('id' => 'xsd:int'),
     array('return' => 'tns:UserData'),
     $namespace,
     false,
     'rpc',
     'encoded',
-    'Seleccionar un usuario por ID (requiere token)'
+    'Seleccionar un usuario por ID (requiere token en el Header)'
 );
 
 $server->register(
     'ListUsersService',
-    array('token' => 'xsd:string'),
+    array(),
     array('return' => 'tns:UserArray'),
     $namespace,
     false,
     'rpc',
     'encoded',
-    'Listar todos los usuarios (requiere token)'
+    'Listar todos los usuarios (requiere token en el Header)'
 );
 
 // 6. Implementación de funciones del servicio
@@ -279,7 +347,7 @@ function LoginService($user_name, $password) {
         }
 
         // Generación del token seguro según especificación de clase:
-        // RANDOM_BYTES() genera bytes criptográficamente seguros y BIN2HEX() los convierte a hexadecimal
+        // RANDOM_BYTES(32) genera bytes criptográficamente seguros y BIN2HEX() los convierte a hexadecimal
         $token = bin2hex(random_bytes(32));
 
         // Guardar el token generado en la base de datos
@@ -295,26 +363,26 @@ function LoginService($user_name, $password) {
     }
 }
 
-// 6.2 Validar Token
-function ValidateTokenService($token) {
+// 6.2 Validar Token (desde parámetro o desde el Header)
+function ValidateTokenService($token = null) {
     if (validate_token($token)) {
         return "1";
     }
     return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : "-1";
 }
 
-// 6.3 Insertar usuario (Protegido por Token y con encriptación de contraseña)
-function InsertUserService($data, $token = null) {
+// 6.3 Insertar usuario (Protegido por Token en el HEADER)
+function InsertUserService($data) {
     global $pdo;
 
     if (!$pdo) {
         return "-1";
     }
 
-    // Permitir token como parámetro independiente o dentro del arreglo $data
-    $authToken = !empty($token) ? $token : ($data['token'] ?? null);
-    if (!validate_token($authToken)) {
-        return "-1";
+    // Validar token estrictamente desde el Header (o fallback dentro de $data)
+    $token = get_token_from_header($data['token'] ?? null);
+    if (!validate_token($token)) {
+        return "-1"; // Token inválido o ausente en el Header
     }
 
     // Validación de campos requeridos
@@ -337,7 +405,7 @@ function InsertUserService($data, $token = null) {
         $lastname    = to_utf8(trim($data['lastname']));
         $doc_type_id = intval($data['doc_type_id']);
         $num_doc     = to_utf8(trim($data['num_doc']));
-        // Encriptar la contraseña usando algoritmo criptográfico seguro (bcrypt por defecto en PHP)
+        // Encriptar la contraseña usando algoritmo criptográfico seguro (bcrypt)
         $password_hash = password_hash(trim($data['password']), PASSWORD_DEFAULT);
         $address     = isset($data['address']) ? to_utf8(trim($data['address'])) : '';
         $phone       = isset($data['phone']) ? to_utf8(trim($data['phone'])) : '';
@@ -358,16 +426,17 @@ function InsertUserService($data, $token = null) {
     }
 }
 
-// 6.4 Actualizar usuario (Protegido por Token)
-function UpdateUserService($data, $token = null) {
+// 6.4 Actualizar usuario (Protegido por Token en el HEADER)
+function UpdateUserService($data) {
     global $pdo;
 
     if (!$pdo) {
         return "-1";
     }
 
-    $authToken = !empty($token) ? $token : ($data['token'] ?? null);
-    if (!validate_token($authToken)) {
+    // Validar token desde el Header
+    $token = get_token_from_header($data['token'] ?? null);
+    if (!validate_token($token)) {
         return "-1";
     }
 
@@ -387,7 +456,6 @@ function UpdateUserService($data, $token = null) {
     }
 
     try {
-        // Verificar existencia previa del usuario
         $check = $pdo->prepare("SELECT id FROM user WHERE id = :id");
         $check->execute(array(':id' => intval($data['id'])));
         if ($check->rowCount() === 0) {
@@ -445,8 +513,8 @@ function UpdateUserService($data, $token = null) {
     }
 }
 
-// 6.5 Eliminar usuario (Protegido por Token)
-function DeleteUserService($id, $token = null) {
+// 6.5 Eliminar usuario (Protegido por Token en el HEADER)
+function DeleteUserService($id) {
     global $pdo;
 
     if (!$pdo) {
@@ -454,10 +522,11 @@ function DeleteUserService($id, $token = null) {
     }
 
     if (is_array($id)) {
-        $token = $token ?: ($id['token'] ?? null);
         $id = $id['id'] ?? null;
     }
 
+    // Validar token desde el Header
+    $token = get_token_from_header();
     if (!validate_token($token)) {
         return "-1";
     }
@@ -485,8 +554,8 @@ function DeleteUserService($id, $token = null) {
     }
 }
 
-// 6.6 Seleccionar usuario por ID (Protegido por Token)
-function SelectUserService($id, $token = null) {
+// 6.6 Seleccionar usuario por ID (Protegido por Token en el HEADER)
+function SelectUserService($id) {
     global $pdo;
 
     if (!$pdo) {
@@ -494,10 +563,11 @@ function SelectUserService($id, $token = null) {
     }
 
     if (is_array($id)) {
-        $token = $token ?: ($id['token'] ?? null);
         $id = $id['id'] ?? null;
     }
 
+    // Validar token desde el Header
+    $token = get_token_from_header();
     if (!validate_token($token)) {
         return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : -1;
     }
@@ -531,18 +601,16 @@ function SelectUserService($id, $token = null) {
     }
 }
 
-// 6.7 Listar todos los usuarios (Protegido por Token)
-function ListUsersService($token = null) {
+// 6.7 Listar todos los usuarios (Protegido por Token en el HEADER)
+function ListUsersService($param = null) {
     global $pdo;
 
     if (!$pdo) {
         return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : -1;
     }
 
-    if (is_array($token)) {
-        $token = $token['token'] ?? null;
-    }
-
+    // Validar token desde el Header
+    $token = get_token_from_header(is_string($param) ? $param : null);
     if (!validate_token($token)) {
         return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : -1;
     }
@@ -577,6 +645,5 @@ function ListUsersService($token = null) {
 }
 
 // 7. Procesar y responder a la solicitud SOAP
-$POST_DATA = file_get_contents("php://input");
 $server->service($POST_DATA);
 exit();

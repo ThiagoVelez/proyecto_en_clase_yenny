@@ -1,6 +1,6 @@
 # Proyecto en Clase Yenny - Servicio Web SOAP (PHP & MySQL)
 
-Servicio web SOAP implementado en PHP utilizando la librería **NuSOAP**, conexión a base de datos MySQL mediante **PDO**, sistema de contraseñas encriptadas y autenticación mediante tokens criptográficos.
+Servicio web SOAP implementado en PHP utilizando la librería **NuSOAP**, conexión a base de datos MySQL mediante **PDO**, sistema de contraseñas encriptadas y autenticación mediante tokens criptográficos enviados en la cabecera (**Header**).
 
 ## Descripción
 
@@ -8,14 +8,32 @@ Este proyecto expone un servidor SOAP con WSDL que implementa autenticación por
 
 ### Operaciones de Autenticación y Token
 - `LoginService`: Recibe `user_name` y `password`, valida la contraseña encriptada y genera un token criptográfico seguro utilizando `$token = bin2hex(random_bytes(32));` que se almacena en la base de datos.
-- `ValidateTokenService`: Valida la autenticidad y existencia de un token en la base de datos.
+- `ValidateTokenService`: Valida la autenticidad y existencia de un token en la base de datos (acepta el token por parámetro o directamente en el Header).
 
-### Operaciones CRUD (Protegidas con Token)
-- `InsertUserService`: Registra un nuevo usuario encriptando la contraseña con algoritmo hash seguro (`password_hash`) y validando el token de autorización.
-- `UpdateUserService`: Modifica la información de un usuario existente (requiere token).
-- `DeleteUserService`: Elimina un usuario por su ID (requiere token).
-- `SelectUserService`: Obtiene los datos detallados de un usuario específico sin exponer contraseñas (requiere token).
-- `ListUsersService`: Lista todos los usuarios registrados sin exponer contraseñas (requiere token).
+### Operaciones CRUD (Protegidas con Token en el Header)
+- `InsertUserService`: Registra un nuevo usuario encriptando la contraseña con algoritmo hash seguro (`password_hash`) y validando el token enviado en la cabecera.
+- `UpdateUserService`: Modifica la información de un usuario existente (requiere token en el Header).
+- `DeleteUserService`: Elimina un usuario por su ID (requiere token en el Header).
+- `SelectUserService`: Obtiene los datos detallados de un usuario específico sin exponer contraseñas (requiere token en el Header).
+- `ListUsersService`: Lista todos los usuarios registrados sin exponer contraseñas (requiere token en el Header).
+
+## Envío del Token en el Header
+
+Para consumir cualquiera de los servicios protegidos en herramientas como **SoapUI**, **Postman** o clientes SOAP, el token debe enviarse dentro de la etiqueta `<soapenv:Header>`:
+
+### Ejemplo de Petición SOAP XML con Token en el Header:
+```xml
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ins="InsertUserSOAP">
+   <soapenv:Header>
+      <token>6d95ea31f6324d8460b32dc19d73891b41ad8444db2ce5e7e2ffb98edf3f187a</token>
+   </soapenv:Header>
+   <soapenv:Body>
+      <ins:ListUsersService/>
+   </soapenv:Body>
+</soapenv:Envelope>
+```
+
+*(También se admite el envío mediante cabecera HTTP estándar: `token: tu_token` o `Authorization: Bearer tu_token`).*
 
 ## Generación del Token y Encriptación
 
@@ -36,7 +54,7 @@ $token = bin2hex(random_bytes(32));
 ├── composer.lock           # Bloqueo de versiones instaladas
 ├── database/
 │   └── soap_cptec.sql      # Script de base de datos MySQL con contraseñas encriptadas
-├── server.php              # Servidor SOAP, autenticación, tokens y CRUD
+├── server.php              # Servidor SOAP, autenticación con token en Header y CRUD
 └── vendor/                 # Dependencias instaladas (NuSOAP)
 ```
 
