@@ -2,7 +2,7 @@
 require_once "vendor/econea/nusoap/src/nusoap.php";
 
 // Capturar el payload XML de la petición cruda para análisis de cabeceras de seguridad
-$POST_DATA = file_get_contents("php://input");
+$POST_DATA = isset($GLOBALS['RAW_POST_DATA']) ? $GLOBALS['RAW_POST_DATA'] : file_get_contents("php://input");
 
 // 1. Configuración del Servidor SOAP
 $namespace = "InsertUserSOAP";
@@ -39,7 +39,8 @@ try {
     ));
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    die("Error de conexión: " . $e->getMessage());
+    error_log("Fallo de conexion a base de datos: " . $e->getMessage());
+    $pdo = null;
 }
 
 // Helper para verificar contraseñas encriptadas (password_hash / SHA256 / SHA1 / MD5)
@@ -679,5 +680,7 @@ function ListUsersService($param = null) {
 }
 
 // 7. Procesar y responder a la solicitud SOAP
-$server->service($POST_DATA);
-exit();
+if (!defined('TESTING_MODE')) {
+    $server->service($POST_DATA);
+    exit();
+}
