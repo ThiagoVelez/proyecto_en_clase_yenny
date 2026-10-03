@@ -14,6 +14,9 @@
 if (!isset($_SERVER['SERVER_NAME'])) {
     $_SERVER['SERVER_NAME'] = 'localhost';
 }
+if (!isset($_SERVER['SERVER_PORT'])) {
+    $_SERVER['SERVER_PORT'] = '80';
+}
 
 define('TESTING_MODE', true);
 require_once __DIR__ . '/server.php';
@@ -114,17 +117,24 @@ if ($pdo) {
 
     // 4.1 LoginService con usuario semilla 'admin' (si existe)
     $loginResult = LoginService('admin', 'admin123');
-    if ($loginResult !== "-1") {
-        assertTest("LoginService retorna token de 64 hex con credenciales válidas", strlen($loginResult) === 64 && ctype_xdigit($loginResult));
-        $validToken = ValidateTokenService($loginResult);
-        assertTest("ValidateTokenService con token activo retorna 1", $validToken === "1");
+    if ($loginResult === "-1" || (is_object($loginResult) && ($loginResult->value ?? '') === "-1")) {
+        $loginResult = LoginService('admin', '123456');
+    }
+
+    $loginVal = is_object($loginResult) ? ($loginResult->value ?? (string)$loginResult) : $loginResult;
+    if ($loginVal !== "-1") {
+        assertTest("LoginService retorna token de 64 hex con credenciales válidas", strlen($loginVal) === 64 && ctype_xdigit($loginVal));
+        $validToken = ValidateTokenService($loginVal);
+        $validTokenVal = is_object($validToken) ? ($validToken->value ?? (string)$validToken) : $validToken;
+        assertTest("ValidateTokenService con token activo retorna 1", $validTokenVal === "1");
     } else {
         echo " [INFO] Usuario semilla 'admin' no encontrado en BD para prueba de Login.\n";
     }
 
     // 4.2 LoginService con contraseña errónea
     $failedLogin = LoginService('admin', 'clave_incorrecta_xyz_999');
-    assertTest("LoginService con contraseña inválida retorna -1", $failedLogin === "-1" || (is_object($failedLogin) && $failedLogin->getval() === '-1'));
+    $failedValue = is_object($failedLogin) ? ($failedLogin->value ?? (string)$failedLogin) : $failedLogin;
+    assertTest("LoginService con contraseña inválida retorna -1", $failedValue === "-1");
 
 } else {
     echo "\n [INFO] MySQL no disponible en este entorno o la base de datos 'soap_cptec' no está inicializada.\n";

@@ -1,4 +1,11 @@
 <?php
+if (!isset($_SERVER['SERVER_NAME'])) {
+    $_SERVER['SERVER_NAME'] = 'localhost';
+}
+if (!isset($_SERVER['SERVER_PORT'])) {
+    $_SERVER['SERVER_PORT'] = '80';
+}
+
 require_once "vendor/econea/nusoap/src/nusoap.php";
 
 // Capturar el payload XML de la petición cruda para análisis de cabeceras de seguridad
@@ -361,14 +368,14 @@ function LoginService($user_name, $password) {
     global $pdo;
 
     if (!$pdo) {
-        return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : "-1";
+        return "-1";
     }
 
     $user_name = trim(to_utf8($user_name));
     $password  = trim(to_utf8($password));
 
     if (empty($user_name) || empty($password)) {
-        return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : "-1";
+        return "-1";
     }
 
     try {
@@ -378,12 +385,12 @@ function LoginService($user_name, $password) {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$user) {
-            return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : "-1";
+            return "-1";
         }
 
         // Validación de contraseña encriptada
         if (!verify_password($password, $user['password'])) {
-            return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : "-1";
+            return "-1";
         }
 
         // Generación del token según diapositiva de clase:
@@ -399,7 +406,7 @@ function LoginService($user_name, $password) {
         return $token;
 
     } catch (PDOException $e) {
-        return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : "-1";
+        return "-1";
     }
 }
 
@@ -408,7 +415,7 @@ function ValidateTokenService($token = null) {
     if (validate_security_header($token)) {
         return "1";
     }
-    return class_exists('soapval') ? new soapval('return', 'xsd:string', '-1') : "-1";
+    return "-1";
 }
 
 // 6.3 Insertar usuario (Protegido por WS-Security en el Header)

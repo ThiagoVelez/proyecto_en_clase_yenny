@@ -57,3 +57,42 @@ CREATE TABLE IF NOT EXISTS `user` (
     `created_date` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de registro',
     CONSTRAINT `fk_user_doc_type` FOREIGN KEY (`doc_type_id`) REFERENCES `document_type` (`id`) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- 5. Inserción de usuarios iniciales de prueba con contraseñas encriptadas (SHA-256)
+-- Contraseñas de prueba:
+--   - 'admin': admin123
+--   - 'yenny_docente': 123456
+--   - 'santiago': 123456
+INSERT INTO `user` (`id`, `user_name`, `lastname`, `doc_type_id`, `num_doc`, `password`, `address`, `phone`)
+VALUES 
+(
+    1,
+    'admin', 
+    'Sistema', 
+    1, 
+    '1000000001', 
+    SHA2('admin123', 256), 
+    'Calle 100 # 10-20', 
+    '3001234567'
+),
+(
+    2,
+    'yenny_docente', 
+    'Perea Murillo', 
+    1, 
+    '1000000002', 
+    SHA2('123456', 256), 
+    'Universidad', 
+    '3109876543'
+),
+(
+    3,
+    'santiago', 
+    'Velez', 
+    1, 
+    '1000000003', 
+    SHA2('123456', 256), 
+    'Carrera 50 # 30-10', 
+    '3155554321'
+) AS new_user
+ON DUPLICATE KEY UPDATE `password` = new_user.password;
